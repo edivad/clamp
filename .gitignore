@@ -1,0 +1,6 @@
+# Local environment: ports and credentials. Create it from .env.example
+# (cp .env.example .env) — it is never committed to git.
+.env
+
+# macOS metadata
+.DS_Store

@@ -1,0 +1,62 @@
+# clamp — a didactic LAMP stack (Linux, Apache, MariaDB, PHP) for learning.
+# Each service below is a container; Docker Compose creates a private
+# network where containers reach each other by service name ("db", "web").
+
+name: clamp
+
+services:
+  # Apache + PHP. Serves the files you edit in ./www.
+  web:
+    build: ./php
+    ports:
+      # Host port comes from .env; the container always listens on 80.
+      - "${WEB_PORT:-8080}:80"
+    volumes:
+      # Bind mount: the folder ./www on your machine IS /var/www/html
+      # inside the container. Edit a file, reload the page — no rebuild.
+      - ./www:/var/www/html
+    environment:
+      # Read by index.php through getenv(); values come from .env.
+      DB_HOST: db
+      DB_NAME: ${MARIADB_DATABASE}
+      DB_USER: ${MARIADB_USER}
+      DB_PASSWORD: ${MARIADB_PASSWORD}
+      ADMINER_PORT: ${ADMINER_PORT:-8081}
+    depends_on:
+      # Start web only once the database really accepts connections.
+      db:
+        condition: service_healthy
+
+  # The database. Reachable only inside the compose network (hostname "db"),
+  # never published on the host.
+  db:
+    image: mariadb:11.8
+    environment:
+      # On first start these create the database, an application user
+      # and the passwords. Values come from .env.
+      MARIADB_DATABASE: ${MARIADB_DATABASE}
+      MARIADB_USER: ${MARIADB_USER}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+    volumes:
+      # Named volume: data survives "docker compose down".
+      - db-data:/var/lib/mysql
+    healthcheck:
+      # Script shipped with the image; "healthy" == accepting connections.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Browser UI to browse the database.
+  adminer:
+    image: adminer:5
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+# Named volume managed by Docker (stored outside this folder).
+volumes:
+  db-data:
